@@ -137,6 +137,7 @@ include_directories(SYSTEM ${DMLC_PATH})
 include_directories(SYSTEM ${RANG_PATH})
 include_directories(SYSTEM ${COMPILER_RT_PATH})
 include_directories(SYSTEM ${PICOJSON_PATH})
+include_directories(SYSTEM "3rdparty/lz4/lib")
 
 # initial variables
 set(TVM_LINKER_LIBS "")
@@ -359,7 +360,11 @@ tvm_file_glob(GLOB RUNTIME_SRCS
   src/runtime/disco/*.cc
   src/runtime/minrpc/*.cc
   src/runtime/relax_vm/*.cc
+  3rdparty/lz4/lib/*.c
 )
+
+
+
 
 if(BUILD_FOR_HEXAGON)
   if(NOT BUILD_STATIC_RUNTIME)
@@ -528,6 +533,7 @@ else()
   set(CMAKE_CXX_FLAGS "/std:c++17 ${CMAKE_CXX_FLAGS}")
   set(CMAKE_CUDA_STANDARD 17)
 endif()
+
 
 # Module rules
 include(cmake/modules/VTA.cmake)

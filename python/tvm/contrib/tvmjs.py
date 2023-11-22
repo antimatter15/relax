@@ -116,6 +116,7 @@ class NDArrayCacheShardingManager:
         return self.shard_records
 
     def _commit_internal(self, data, records):
+        print('3rdparty/tvm/python')
         data_path = f"{self.prefix}_{self.counter}.bin"
         self.counter += 1
         with open(os.path.join(self.cache_dir, data_path), "wb") as outfile:
@@ -198,7 +199,7 @@ def dump_ndarray_cache(
         shard_manager.append(data, name=k, shape=shape, dtype=dtype, encode_format=encode_format)
 
         counter += 1
-        last_cmd = "[%04d/%04d] saving %s" % (counter, total, k)
+        last_cmd = "[%04d/%04d] savingX %s" % (counter, total, k)
         flush = "\r" + (" " * max_out_length) + "\r"
         max_out_length = max(len(last_cmd), max_out_length)
         sys.stdout.write(flush + last_cmd)

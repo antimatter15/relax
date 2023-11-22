@@ -50,6 +50,9 @@
 #include "../../support/utils.h"
 #include "../file_utils.h"
 
+#include <lz4frame.h>
+
+
 namespace tvm {
 namespace runtime {
 namespace relax_vm {
@@ -257,11 +260,54 @@ class NDArrayCache {
     Map<String, NDArray> result;
     std::string raw_data;
     for (const auto& shard_rec : metadata.records) {
-      LoadBinaryFromFile(cache_path + "/" + shard_rec.data_path, &raw_data);
-      CHECK_EQ(shard_rec.format, "raw-shard") << "ValueError: Only `raw-shard` format is supported";
-      CHECK_EQ(shard_rec.nbytes, raw_data.length())
+      if(shard_rec.format == "raw-shard"){
+        LoadBinaryFromFile(cache_path + "/" + shard_rec.data_path, &raw_data);
+        CHECK_EQ(shard_rec.nbytes, raw_data.length())
           << "ValueError: Parameters are not loaded properly. Please check your parameter shards "
              "and git lfs installation";
+      }else if(shard_rec.format == "lz4-shard"){
+        raw_data.resize(shard_rec.nbytes);
+
+        std::string file_name = cache_path + "/" + shard_rec.data_path;
+        LZ4F_decompressionContext_t dctx;
+        LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+
+        FILE* lz4_file = fopen(file_name.c_str(), "rb");
+        if (!lz4_file) {
+            throw std::runtime_error("Cannot open LZ4 compressed file " + file_name);
+        }
+
+        int total_bytes_read = 0;
+        while(total_bytes_read < shard_rec.nbytes){
+            char buffer[1024*512];
+            int bytes_read = fread(buffer, 1, sizeof(buffer), lz4_file);
+            if (bytes_read < 0) {
+                fclose(lz4_file);
+                throw std::runtime_error("Error reading LZ4 compressed file " + file_name);
+            } else if (bytes_read == 0) {
+                break; // End of file reached
+            }
+            LZ4F_decompressOptions_t options = {0};
+            size_t dstSize = shard_rec.nbytes - total_bytes_read;
+            size_t srcSize = bytes_read;
+            size_t ret = LZ4F_decompress(dctx, &raw_data[total_bytes_read], &dstSize, buffer, &srcSize, &options);
+            if (LZ4F_isError(ret)) {
+                fclose(lz4_file);
+                throw std::runtime_error("Error decompressing LZ4 compressed file " + file_name + ": " + LZ4F_getErrorName(ret));
+            }
+            total_bytes_read += dstSize;
+        }
+
+        CHECK_EQ(shard_rec.nbytes, total_bytes_read)
+            << "ValueError: Still didnt read enough bytes.. Please check your parameter shards "
+               "and git lfs installation";
+
+        fclose(lz4_file);
+        LZ4F_freeDecompressionContext(dctx);
+      }else{
+        CHECK_EQ(shard_rec.format, "raw-shard") << "ValueError: Only `raw-shard` and `gzip-shard` formats are supported";
+      }
+      
       for (const auto& nd_rec : shard_rec.records) {
         Update(nd_rec.name, nd_rec.Load(device, &raw_data, fcopy_param_from_bytes), true);
       }
